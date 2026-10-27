@@ -1,0 +1,13 @@
+num_classes: 100
+lr: 0.001
+momentum: 0.9
+weight_decay: 0
+scheduler: step
+max_epochs: 50
+freeze_backbone: true
+data_dir: /workspace/aml-project-main/./data
+batch_size: 128
+num_workers: 0
+val_split: 0.1
+seed: 42
+image_size: 224

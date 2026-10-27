@@ -1,0 +1,32 @@
+defaults:
+  - base
+  - _self_
+
+experiment_name: centralized_baseline
+
+
+trainer:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+  precision: 16-mixed
+  log_every_n_steps: 50
+  check_val_every_n_epoch: 1
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 2
+
+scheduler:
+  name: cosine
+
+callbacks:
+  early_stopping:
+    monitor: val_acc
+    patience: 10
+    mode: max
+  model_checkpoint:
+    monitor: val_acc
+    mode: max
+    save_top_k: 1
+    save_last: true
+    dirpath: ./results/checkpoints/centralized
+    filename: "{epoch:02d}-{val_acc:.4f}"

@@ -1,0 +1,89 @@
+{
+  "config": {
+    "seed": 42,
+    "data": {
+      "data_dir": "./data",
+      "batch_size": 32,
+      "num_workers": 0,
+      "val_split": 0.1
+    },
+    "model": {
+      "num_classes": 100,
+      "freeze_backbone": true,
+      "image_size": 224
+    },
+    "optimizer": {
+      "lr": 0.01,
+      "momentum": 0.9,
+      "weight_decay": 0
+    },
+    "logging": {
+      "log_dir": "./results/logs",
+      "eval_every": 10,
+      "checkpoint_every": 50,
+      "checkpoint_dir": "./results/checkpoints/fedavg",
+      "output_dir": "./results/outputs/fedavg"
+    },
+    "experiment_name": "fedavg_nc50_j16",
+    "federated": {
+      "num_clients": 100,
+      "participation_rate": 0.1,
+      "local_steps": 16,
+      "num_rounds": 125,
+      "sharding": "non_iid",
+      "num_classes_per_client": 50,
+      "use_sparse": false,
+      "sparse_strategy": "least_sensitive",
+      "sparsity_level": 0.5,
+      "num_calibration_rounds": 3,
+      "alpha": 1.0
+    }
+  },
+  "history": {
+    "round": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      110,
+      120
+    ],
+    "val_loss": [
+      1.5145713969230652,
+      1.3344062786579132,
+      1.3262250144958496,
+      1.1290240754365921,
+      1.1759768097877503,
+      1.2430225689888001,
+      1.0743959390640259,
+      1.1090231460094453,
+      1.122815345811844,
+      1.4398051719665528,
+      1.1439600483894348,
+      1.072737105512619
+    ],
+    "val_acc": [
+      0.6864,
+      0.7294,
+      0.7398,
+      0.7612,
+      0.7674,
+      0.7632,
+      0.7852,
+      0.7868,
+      0.7846,
+      0.7696,
+      0.7896,
+      0.7948
+    ]
+  },
+  "final_val_acc": 0.7948,
+  "final_test_loss": 1.160738428735733,
+  "final_test_acc": 0.7817
+}

@@ -1,0 +1,27 @@
+defaults:
+  - base
+  - _self_
+
+experiment_name: fedavg
+
+
+federated:
+  num_clients: 100
+  participation_rate: 0.1
+  local_steps: 3
+  num_rounds: 500
+  sharding: iid
+  num_classes_per_client: 10  # only used when sharding: shard
+
+  # Task arithmetic
+  use_sparse: true
+  sparse_strategy: "least_sensitive"
+  sparsity_level: 0.5
+  num_calibration_rounds: 3
+  alpha: 0.4
+
+logging:
+  eval_every: 10
+  checkpoint_every: 50 # not used...
+  checkpoint_dir: ./results/checkpoints/fedavg
+  output_dir: ./results/outputs/fedavg
