@@ -25,14 +25,36 @@ class FisherPruner:
     4. Creates binary mask: mask=1 for parameters to update, mask=0 to freeze
     
     Args:
-        sparsity_level: Fraction of parameters to freeze (mask=0). 
+        sparsity_level: Fraction of parameters to freeze (mask=0), for every strategy.
                        E.g., 0.7 means 70% frozen (30% updated).
         strategy: Masking strategy ("least_sensitive", "most_sensitive", etc.)
+        seed: Seed for the "random" strategy.
     """
-    def __init__(self, sparsity_level: float = 0.5, strategy: str = "least_sensitive"):
+    def __init__(self, sparsity_level: float = 0.5, strategy: str = "least_sensitive", seed: int = 0):
         self.sparsity_level = sparsity_level
         self.strategy = strategy
+        self.seed = seed
         self.global_mask = {}
+
+    def _build_mask(self, scores: dict, train_lowest: bool) -> dict:
+        """
+        Train exactly round((1 - sparsity_level) * N) weights, picked globally by score.
+
+        Shared by all strategies so that sparsity_level means the same thing everywhere [15].
+        torch.topk selects an exact count, so ties cannot change the trained fraction.
+        """
+        all_scores = torch.cat([s.flatten() for s in scores.values()])
+        n_train = round((1 - self.sparsity_level) * all_scores.numel())
+        flat_mask = torch.zeros_like(all_scores)
+        if n_train > 0:
+            idx = torch.topk(all_scores, n_train, largest=not train_lowest).indices
+            flat_mask[idx] = 1.0
+
+        offset = 0
+        for name, s in scores.items():
+            self.global_mask[name] = flat_mask[offset:offset + s.numel()].view_as(s).cpu()
+            offset += s.numel()
+        return self.global_mask
 
     def compute_mask(
         self, 
@@ -46,7 +68,7 @@ class FisherPruner:
         
         This implements Step 1 of sparse fine-tuning:
         - Calibrates mask in multiple rounds (see [15], Sec. 4.2 for rationale)
-        - Identifies parameters with sensitivity scores below threshold
+        - Keeps exactly (1 - sparsity_level) of the weights trainable, picked by the strategy's score
         - Returns binary mask: mask[name][param] = 1 (update) or 0 (freeze)
         
         Args:
@@ -84,8 +106,8 @@ class FisherPruner:
         
         After all rounds:
         5. Average: Compute mean sensitivity scores across rounds
-        6. Threshold: Identify least-sensitive parameters (scores < threshold)
-        7. Mask: Create binary mask (1=update least-sensitive, 0=freeze most-sensitive)
+        6. Mask: _build_mask trains the (1 - sparsity_level) fraction with the lowest
+           (least_sensitive) or highest (most_sensitive) scores and freezes the rest
         
         Multi-round rationale: Averages out gradient noise and outliers for robust mask
         (see [15], Sec. 4.2 for detailed explanation).
@@ -139,53 +161,27 @@ class FisherPruner:
             for name in accumulated_fisher:
                 accumulated_fisher[name] /= num_rounds
 
-            # Compute global threshold based on sparsity level
-            # Flatten all sensitivity scores into single tensor
-            all_scores = torch.cat([f.view(-1) for f in accumulated_fisher.values()])
-            # k: number of parameters to freeze (mask=0)
-            k = int(all_scores.numel() * self.sparsity_level)
-
-            if self.strategy == "least_sensitive":
-                # Find k-th smallest score (threshold for least-sensitive parameters)
-                threshold = torch.kthvalue(all_scores, k).values
-                # mask=1 for parameters with score <= threshold (least sensitive → will update)
-                # mask=0 for parameters with score > threshold (most sensitive → will freeze)
-                for name, f in accumulated_fisher.items():
-                    self.global_mask[name] = (f <= threshold).float().cpu()
-            else:  # most_sensitive
-                # Find k-th largest score (threshold for most-sensitive parameters)
-                threshold = torch.kthvalue(all_scores, all_scores.numel() - k + 1).values
-                # mask=1 for parameters with score >= threshold (most sensitive → will update)
-                # mask=0 for parameters with score < threshold (least sensitive → will freeze)
-                for name, f in accumulated_fisher.items():
-                    self.global_mask[name] = (f >= threshold).float().cpu()
-        return self.global_mask
+            # least_sensitive: update the lowest Fisher scores, freeze the rest
+            # most_sensitive: update the highest Fisher scores, freeze the rest
+            return self._build_mask(
+                accumulated_fisher, train_lowest=(self.strategy == "least_sensitive")
+            )
     
 
     def _random_mask(self, model):
-        for name, p in model.named_parameters():
-            if p.requires_grad:
-                rand = torch.rand_like(p)
-                self.global_mask[name] = (rand > self.sparsity_level).float().cpu()
-        return self.global_mask
-    
+        # Uniform random scores from a seeded generator, so masks are reproducible
+        generator = torch.Generator().manual_seed(self.seed)
+        scores = {
+            name: torch.rand(p.shape, generator=generator)
+            for name, p in model.named_parameters()
+            if p.requires_grad
+        }
+        return self._build_mask(scores, train_lowest=True)
+
     def _magnitude_mask(self, model):
-        all_weights = []
-        param_names = []
-        for name, p in model.named_parameters():
-            if p.requires_grad:
-                all_weights.append(p.data.abs().view(-1))
-                param_names.append(name)
-        
-        all_weights = torch.cat(all_weights)
-        k = int(self.sparsity_level * all_weights.numel())
-        threshold, _ = torch.kthvalue(all_weights, k)
-        
-        for name, p in model.named_parameters():
-            if p.requires_grad:
-                if self.strategy == "lowest_magnitude":
-                    self.global_mask[name] = (p.data.abs() <= threshold).float().cpu()
-                else:
-                    self.global_mask[name] = (p.data.abs() > threshold).float().cpu()
-        
-        return self.global_mask
+        scores = {
+            name: p.data.abs()
+            for name, p in model.named_parameters()
+            if p.requires_grad
+        }
+        return self._build_mask(scores, train_lowest=(self.strategy == "lowest_magnitude"))
