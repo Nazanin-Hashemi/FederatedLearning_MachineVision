@@ -2,6 +2,15 @@
 
 This repository implements a Federated Learning (FedAvg) with sparse fine-tuning and task arithmetic, using a DINO-pretrained Vision Transformer backbone on CIFAR-100.
 
+## Origin & Contributions
+This project started as the team course project for *Advanced Machine Learning* at Politecnico di Torino (2025-26):
+https://github.com/SolarFlareZ/aml-project (my fork with the full team history: https://github.com/Nazanin-Hashemi/AMLProject). That code is included here as a single commit (tag `team-import`).
+In the original project, my parts were: IID / non-IID sharding, task arithmetic evaluation, the ridge-initialized
+classifier head, and the sparse fine-tuning implementation.
+**Everything after the `team-import` commit is my own work (Nazanin Hashemi):** the audit of the original code,
+bug fixes (sparsity definition, multi-round calibration, Fisher scoring, non-IID sharding, ...), federated ridge head,
+Weights & Biases logging, new experiments, and analysis.
+
 ## Features
 
 - Centralized baseline training
